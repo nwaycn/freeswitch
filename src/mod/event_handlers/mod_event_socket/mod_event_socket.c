@@ -653,6 +653,7 @@ static void send_disconnect(listener_t *listener, const char *message)
 	len = strlen(disco_buf);
 	switch_socket_send(listener->sock, disco_buf, &len);
 	if (len > 0) {
+		if (!listener->sock) return;
 		len = mlen;
 		switch_socket_send(listener->sock, message, &len);
 	}
