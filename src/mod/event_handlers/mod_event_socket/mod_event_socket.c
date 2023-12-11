@@ -631,7 +631,7 @@ static void remove_listener(listener_t *listener)
 static void send_disconnect(listener_t *listener, const char *message)
 {
 
-	char disco_buf[512] = "";
+	char *data = NULL;
 	switch_size_t len, mlen;
 
 	if (zstr(message)) {
@@ -639,24 +639,31 @@ static void send_disconnect(listener_t *listener, const char *message)
 	}
 
 	mlen = strlen(message);
-
+	
 	if (listener->session) {
-		switch_snprintf(disco_buf, sizeof(disco_buf), "Content-Type: text/disconnect-notice\n"
+		data = switch_mprintf("Content-Type: text/disconnect-notice\n"
 						"Controlled-Session-UUID: %s\n"
-						"Content-Disposition: disconnect\n" "Content-Length: %d\n\n", switch_core_session_get_uuid(listener->session), (int)mlen);
+						"Content-Disposition: disconnect\n" "Content-Length: %d\n\n%s", switch_core_session_get_uuid(listener->session), (int)mlen, message);
 	} else {
-		switch_snprintf(disco_buf, sizeof(disco_buf), "Content-Type: text/disconnect-notice\nContent-Length: %d\n\n", (int)mlen);
+		data = switch_mprintf("Content-Type: text/disconnect-notice\nContent-Length: %d\n\n%s", (int)mlen, message);
 	}
 
-	if (!listener->sock) return;
+	if (!listener->sock) {
+		
+		goto end;
+	}
+	len = strlen(data);
 
-	len = strlen(disco_buf);
-	switch_socket_send(listener->sock, disco_buf, &len);
+	switch_socket_send(listener->sock, data, &len);
+
+	
 	if (len > 0) {
-		if (!listener->sock) return;
+		if (!listener->sock) goto end;
 		len = mlen;
 		switch_socket_send(listener->sock, message, &len);
 	}
+end:
+	switch_safe_free(data);
 }
 
 static void kill_listener(listener_t *l, const char *message)
