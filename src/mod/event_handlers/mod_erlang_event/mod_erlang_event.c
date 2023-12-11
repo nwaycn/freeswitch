@@ -1401,7 +1401,6 @@ void destroy_listener(listener_t * listener)
 	switch_mutex_unlock(listener->sock_mutex);
 
 	switch_core_hash_destroy(&listener->event_hash);
-	switch_core_hash_destroy(&listener->sessions);
 
 	/* remove any bindings for this connection */
 	remove_binding(listener, NULL);
@@ -1414,6 +1413,7 @@ void destroy_listener(listener_t * listener)
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Orphaning call %s\n", s->uuid_str);
 		destroy_session_elem(s);
 	}
+	switch_core_hash_destroy(&listener->sessions);
 	switch_thread_rwlock_unlock(listener->session_rwlock);
 	switch_thread_rwlock_unlock(listener->rwlock);
 
@@ -1421,7 +1421,6 @@ void destroy_listener(listener_t * listener)
 		switch_memory_pool_t *pool = listener->pool;
 		switch_core_destroy_memory_pool(&pool);
 	}
-
 }
 
 static switch_status_t state_handler(switch_core_session_t *session)
@@ -1999,7 +1998,7 @@ SWITCH_MODULE_RUNTIME_FUNCTION(mod_erlang_event_runtime)
 	struct ei_cnode_s ec;
 	ErlConnect conn;
 	int clientfd;
-	switch_os_socket_t epmdfd;
+	switch_os_socket_t epmdfd = SWITCH_SOCK_INVALID;
 	switch_socket_t *epmd_sock = NULL;
 
 	if (switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {

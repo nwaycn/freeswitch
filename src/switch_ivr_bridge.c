@@ -175,9 +175,6 @@ static void video_bridge_thread(switch_core_session_t *session, void *obj)
 
 	while (switch_channel_up_nosig(channel) && switch_channel_up_nosig(b_channel) && vh->up == 1) {
 		if (switch_channel_media_up(channel)) {
-			switch_codec_t *a_codec = switch_core_session_get_video_read_codec(vh->session_a);
-			switch_codec_t *b_codec = switch_core_session_get_video_write_codec(vh->session_b);
-			
 			if (switch_core_session_transcoding(vh->session_a, vh->session_b, SWITCH_MEDIA_TYPE_VIDEO)) {
 				pass_val = 1;
 			} else {
@@ -195,11 +192,14 @@ static void video_bridge_thread(switch_core_session_t *session, void *obj)
 			}
 
 			if (!switch_channel_test_flag(channel, CF_PROXY_MEDIA)) {
-				switch_assert(a_codec);
-				switch_assert(b_codec);
+				switch_codec_implementation_t session_a_codec_implementation;
+				switch_codec_implementation_t session_b_codec_implementation;
+
+				switch_core_session_get_video_read_impl(vh->session_a, &session_a_codec_implementation);
+				switch_core_session_get_video_write_impl(vh->session_b, &session_b_codec_implementation);
 
 				if (switch_channel_test_flag(channel, CF_VIDEO_DECODED_READ)) {
-					if (a_codec->implementation->impl_id == b_codec->implementation->impl_id && !switch_channel_test_flag(b_channel, CF_VIDEO_DECODED_READ)) {
+					if (session_a_codec_implementation.impl_id == session_b_codec_implementation.impl_id && !switch_channel_test_flag(b_channel, CF_VIDEO_DECODED_READ)) {
 						if (set_decoded_read) {
 							switch_channel_clear_flag_recursive(channel, CF_VIDEO_DECODED_READ);
 							set_decoded_read = 0;
@@ -207,7 +207,7 @@ static void video_bridge_thread(switch_core_session_t *session, void *obj)
 						}
 					}
 				} else {
-					if (a_codec->implementation->impl_id != b_codec->implementation->impl_id ||
+					if (session_a_codec_implementation.impl_id != session_b_codec_implementation.impl_id ||
 						switch_channel_test_flag(b_channel, CF_VIDEO_DECODED_READ)) {
 						switch_channel_set_flag_recursive(channel, CF_VIDEO_DECODED_READ);
 						set_decoded_read = 1;
@@ -237,7 +237,7 @@ static void video_bridge_thread(switch_core_session_t *session, void *obj)
 			continue;
 		}
 
-		if (switch_channel_media_up(b_channel)) {
+		if (read_frame && switch_channel_media_up(b_channel)) {
 			if (switch_core_session_write_video_frame(vh->session_b, read_frame, SWITCH_IO_FLAG_NONE, 0) != SWITCH_STATUS_SUCCESS) {
 				switch_cond_next();
 				continue;
@@ -507,7 +507,6 @@ static void *audio_bridge_thread(switch_thread_t *thread, void *obj)
 
 
 	for (;;) {
-		switch_channel_state_t b_state;
 		switch_status_t status;
 		switch_event_t *event;
 
@@ -543,7 +542,7 @@ static void *audio_bridge_thread(switch_thread_t *thread, void *obj)
 			goto end_of_bridge_loop;
 		}
 
-		if ((b_state = switch_channel_down_nosig(chan_b))) {
+		if (switch_channel_down_nosig(chan_b)) {
 			goto end_of_bridge_loop;
 		}
 
@@ -953,14 +952,13 @@ static void *audio_bridge_thread(switch_thread_t *thread, void *obj)
 
 static void transfer_after_bridge(switch_core_session_t *session, const char *where)
 {
-	int argc;
 	char *argv[4] = { 0 };
 	char *mydata;
 
 	switch_channel_set_variable(switch_core_session_get_channel(session), SWITCH_TRANSFER_AFTER_BRIDGE_VARIABLE, NULL);
 
 	if (!zstr(where) && (mydata = switch_core_session_strdup(session, where))) {
-		if ((argc = switch_separate_string(mydata, ':', argv, (sizeof(argv) / sizeof(argv[0])))) >= 1) {
+		if (switch_separate_string(mydata, ':', argv, (sizeof(argv) / sizeof(argv[0]))) >= 1) {
 			switch_ivr_session_transfer(session, argv[0], argv[1], argv[2]);
 		} else {
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "No extension specified.\n");
@@ -2017,6 +2015,9 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_uuid_bridge(const char *originator_uu
 			originator_channel = switch_core_session_get_channel(originator_session);
 			originatee_channel = switch_core_session_get_channel(originatee_session);
 
+			switch_ivr_check_hold(originator_session);
+			switch_ivr_check_hold(originatee_session);
+	
 
 			if (switch_channel_test_flag(originator_channel, CF_LEG_HOLDING)) {
 				switch_channel_set_flag(originator_channel, CF_HOLD_ON_BRIDGE);
