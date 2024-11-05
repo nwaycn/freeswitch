@@ -1092,16 +1092,22 @@ SWITCH_DECLARE(switch_event_header_t *) switch_channel_variable_first(switch_cha
 
 SWITCH_DECLARE(switch_status_t) switch_channel_set_private(switch_channel_t *channel, const char *key, const void *private_info)
 {
-	switch_assert(channel != NULL);
-	switch_core_hash_insert_locked(channel->private_hash, key, private_info, channel->profile_mutex);
-	return SWITCH_STATUS_SUCCESS;
-}
+	 
+      switch_assert(channel != NULL);
+      if (channel && channel->private_hash){
+          switch_core_hash_insert_locked(channel->private_hash, key, private_info, channel->profile_mutex);
+      	  return SWITCH_STATUS_SUCCESS;
+      }else{
+          return SWITCH_SUATUS_FAILED;
+      }
 
 SWITCH_DECLARE(void *) switch_channel_get_private(switch_channel_t *channel, const char *key)
 {
-	void *val;
+	void *val=NULL;
 	switch_assert(channel != NULL);
-	val = switch_core_hash_find_locked(channel->private_hash, key, channel->profile_mutex);
+	if (channel && channel->private_hash){
+	    val = switch_core_hash_find_locked(channel->private_hash, key, channel->profile_mutex);
+	}
 	return val;
 }
 
